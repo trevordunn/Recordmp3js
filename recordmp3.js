@@ -1,10 +1,28 @@
 (function (window) {
 
-	var WORKER_PATH = 'js/recorderWorker.js';
-	var encoderWorker = new Worker('js/mp3Worker.js');
+	var RECORDER_WORKER_PATH = 'recorderWorker.js';
+	var ENCODER_WORKER_PATH = 'mp3Worker.js';
+
+	var encoderWorker;
 
 	var Recorder = function (sourceNode, cfg) {
-		var config = cfg || {};
+		var config = {
+			bufferLen: null,
+			workersBasePath: "js/",
+			type: null
+		};
+
+		this.configure = function (cfg) {
+			for (var prop in cfg) {
+				if (config.hasOwnProperty(prop)) {
+					config[prop] = cfg[prop];
+				}
+			}
+		};
+
+		this.configure(cfg);
+
+		encoderWorker = new Worker(config.workersBasePath + ENCODER_WORKER_PATH);
 
 		var callbacks = {},
 			nextCallbackId = 0;
@@ -42,7 +60,7 @@
 		sourceNode.connect(this.processorNode);
 		this.processorNode.connect(this.context.destination);
 
-		var worker = new Worker(config.workerPath || WORKER_PATH);
+		var worker = new Worker(config.workersBasePath + RECORDER_WORKER_PATH);
 		worker.postMessage({
 			command: 'init',
 			config: {
@@ -63,14 +81,6 @@
 				case "getBuffer":
 					if (callback) { callback(e.data.buffers); }
 					break;
-			}
-		};
-
-		this.configure = function (cfg) {
-			for (var prop in cfg) {
-				if (config.hasOwnProperty(prop)) {
-					config[prop] = cfg[prop];
-				}
 			}
 		};
 
