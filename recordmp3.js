@@ -190,6 +190,13 @@
 		}
 	};
 
+	Recorder.isBrowserCompatible = function () {
+		if (window.Worker && window.Float32Array && window.FileReader) {
+			return true;
+		}
+		return false;
+	};
+
 	window.Recorder = Recorder;
 
 })(window);
