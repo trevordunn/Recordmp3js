@@ -3,7 +3,7 @@
 	var WORKER_PATH = 'js/recorderWorker.js';
 	var encoderWorker = new Worker('js/mp3Worker.js');
 
-	var Recorder = function (source, cfg) {
+	var Recorder = function (sourceNode, cfg) {
 		var config = cfg || {},
 			currCallback;
 
@@ -11,7 +11,7 @@
 
 		var bufferLen = config.bufferLen || 4096;
 
-		this.context = source.context;
+		this.context = sourceNode.context;
 
 		this.processorNode = (this.context.createScriptProcessor || this.context.createJavaScriptNode).call(this.context,bufferLen, 2, 2);
 		this.processorNode.onaudioprocess = function (e) {
@@ -25,7 +25,7 @@
 			});
 		}
 
-		source.connect(this.processorNode);
+		sourceNode.connect(this.processorNode);
 		this.processorNode.connect(this.context.destination);
 
 		var worker = new Worker(config.workerPath || WORKER_PATH);
