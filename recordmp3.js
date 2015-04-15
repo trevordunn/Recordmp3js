@@ -57,7 +57,12 @@
 			});
 		};
 
-		sourceNode.connect(this.processorNode);
+		this.setSourceNode = function (sourceNode) {
+			sourceNode.connect(this.processorNode);
+		};
+
+		this.setSourceNode(sourceNode);
+
 		this.processorNode.connect(this.context.destination);
 
 		var worker = new Worker(config.workersBasePath + RECORDER_WORKER_PATH);
