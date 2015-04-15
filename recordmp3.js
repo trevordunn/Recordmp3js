@@ -26,6 +26,7 @@
 		}
 
 		source.connect(this.node);
+		this.node.connect(this.context.destination);
 
 		var worker = new Worker(config.workerPath || WORKER_PATH);
 		worker.postMessage({
