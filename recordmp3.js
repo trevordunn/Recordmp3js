@@ -50,7 +50,6 @@
 			}
 		});
 
-		// MP3 conversion
 		worker.onmessage = function (e) {
 			var callbackId = e.data.callbackId,
 				callback = callbackId ? getCallback(callbackId) : null;
@@ -59,63 +58,7 @@
 
 			switch (command) {
 				case "exportWAV":
-					var blob = e.data.blob;
-
-					var arrayBuffer;
-
-					var fileReader = new FileReader();
-					fileReader.onload = function () {
-						arrayBuffer = this.result;
-
-						var buffer = new Uint8Array(arrayBuffer),
-							data = parseWav(buffer);
-
-						encoderWorker.postMessage({ cmd: 'init', config:{
-							mode : 3,
-							channels:1,
-							samplerate: data.sampleRate,
-							bitrate: data.bitsPerSample
-						}});
-
-						encoderWorker.postMessage({ cmd: 'encode', buf: Uint8ArrayToFloat32Array(data.samples) });
-						encoderWorker.postMessage({ cmd: 'finish' });
-
-						encoderWorker.onmessage = function (e) {
-							if (e.data.cmd == 'data') {
-								var url = 'data:audio/mp3;base64,' + encode64(e.data.buf);
-
-								/*
-								var audio = new Audio();
-								audio.src = url;
-								audio.play();
-								*/
-
-								var mp3Blob = new Blob(
-									[ new Uint8Array(e.data.buf) ],
-									{ type: 'audio/mp3' }
-								);
-
-								uploadAudio(mp3Blob);
-
-								var li = document.createElement('li');
-								var au = document.createElement('audio');
-								var hf = document.createElement('a');
-
-								au.controls = true;
-								au.src = url;
-								hf.href = url;
-								hf.download = 'audio_recording_' + new Date().getTime() + '.mp3';
-								hf.innerHTML = hf.download;
-								li.appendChild(au);
-								li.appendChild(hf);
-								recordingslist.appendChild(li);
-							}
-						};
-					};
-
-					fileReader.readAsArrayBuffer(blob);
-
-					if (callback) { callback(blob); }
+					if (callback) { callback(e.data.blob); }
 					break;
 				case "getBuffer":
 					if (callback) { callback(e.data.buffers); }
@@ -160,6 +103,45 @@
 				type: type
 			});
 		};
+
+		this.encodeMP3 = function (wavBlob, callback) {
+			if (!callback) { throw new Error('encodeMP3: Callback not set'); }
+
+			var arrayBuffer;
+
+			var fileReader = new FileReader();
+			fileReader.onload = function () {
+				arrayBuffer = this.result;
+
+				var buffer = new Uint8Array(arrayBuffer),
+					data = parseWav(buffer);
+
+				encoderWorker.postMessage({ cmd: 'init', config:{
+					mode : 3,
+					channels:1,
+					samplerate: data.sampleRate,
+					bitrate: data.bitsPerSample
+				}});
+
+				encoderWorker.postMessage({ cmd: 'encode', buf: Uint8ArrayToFloat32Array(data.samples) });
+				encoderWorker.postMessage({ cmd: 'finish' });
+
+				encoderWorker.onmessage = function (e) {
+					if (e.data.cmd == 'data') {
+						var url = 'data:audio/mp3;base64,' + encode64(e.data.buf);
+
+						var mp3Blob = new Blob(
+							[ new Uint8Array(e.data.buf) ],
+							{ type: 'audio/mp3' }
+						);
+
+						callback(mp3Blob, url);
+					}
+				};
+			};
+
+			fileReader.readAsArrayBuffer(wavBlob);
+		}
 
 		function encode64 (buffer) {
 			var binary = '',
@@ -206,43 +188,7 @@
 			}
 			return f32Buffer;
 		}
-
-		function uploadAudio (mp3Data) {
-			var reader = new FileReader();
-
-			reader.onload = function (event) {
-				var fd = new FormData();
-				var mp3Name = encodeURIComponent('audio_recording_' + new Date().getTime() + '.mp3');
-				fd.append('fname', mp3Name);
-				fd.append('data', event.target.result);
-				$.ajax({
-					type: 'POST',
-					url: 'upload.php',
-					data: fd,
-					processData: false,
-					contentType: false
-				}).done(function (data) {
-					//console.log(data);
-				});
-			};
-
-			reader.readAsDataURL(mp3Data);
-		}
 	};
-
-	/*
-	Recorder.forceDownload = function (blob, filename) {
-		var clickEvent = document.createEvent("Event");
-		clickEvent.initEvent("click", true, true);
-
-		var url = (window.URL || window.webkitURL).createObjectURL(blob);
-
-		var link = window.document.createElement('a');
-		link.href = url;
-		link.download = filename || 'output.wav';
-		link.dispatchEvent(clickEvent);
-	}
-	*/
 
 	window.Recorder = Recorder;
 
