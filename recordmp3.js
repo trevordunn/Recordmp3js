@@ -13,7 +13,7 @@
 
 		this.context = sourceNode.context;
 
-		this.processorNode = (this.context.createScriptProcessor || this.context.createJavaScriptNode).call(this.context,bufferLen, 2, 2);
+		this.processorNode = (this.context.createScriptProcessor || this.context.createJavaScriptNode).call(this.context, bufferLen, 2, 2);
 		this.processorNode.onaudioprocess = function (e) {
 			if (!recording) return;
 			worker.postMessage({
@@ -23,7 +23,7 @@
 					//e.inputBuffer.getChannelData(1)
 				]
 			});
-		}
+		};
 
 		sourceNode.connect(this.processorNode);
 		this.processorNode.connect(this.context.destination);
@@ -57,18 +57,25 @@
 				}});
 
 				encoderWorker.postMessage({ cmd: 'encode', buf: Uint8ArrayToFloat32Array(data.samples) });
-				encoderWorker.postMessage({ cmd: 'finish'});
+				encoderWorker.postMessage({ cmd: 'finish' });
 
 				encoderWorker.onmessage = function (e) {
 					if (e.data.cmd == 'data') {
-						/*var audio = new Audio();
-						audio.src = 'data:audio/mp3;base64,'+encode64(e.data.buf);
-						audio.play();*/
+						var url = 'data:audio/mp3;base64,' + encode64(e.data.buf);
 
-						var mp3Blob = new Blob([new Uint8Array(e.data.buf)], {type: 'audio/mp3'});
+						/*
+						var audio = new Audio();
+						audio.src = url;
+						audio.play();
+						*/
+
+						var mp3Blob = new Blob(
+							[ new Uint8Array(e.data.buf) ],
+							{ type: 'audio/mp3' }
+						);
+
 						uploadAudio(mp3Blob);
 
-						var url = 'data:audio/mp3;base64,'+encode64(e.data.buf);
 						var li = document.createElement('li');
 						var au = document.createElement('audio');
 						var hf = document.createElement('a');
@@ -81,7 +88,6 @@
 						li.appendChild(au);
 						li.appendChild(hf);
 						recordingslist.appendChild(li);
-
 					}
 				};
 			};
@@ -97,34 +103,34 @@
 					config[prop] = cfg[prop];
 				}
 			}
-		}
+		};
 
 		this.record = function () {
 			recording = true;
-		}
+		};
 
 		this.stop = function () {
 			recording = false;
-		}
+		};
 
 		this.clear = function () {
 			worker.postMessage({ command: 'clear' });
-		}
+		};
 
 		this.getBuffer = function (cb) {
 			currCallback = cb || config.callback;
 			worker.postMessage({ command: 'getBuffer' })
-		}
+		};
 
 		this.exportWAV = function (cb, type) {
 			currCallback = cb || config.callback;
 			type = type || config.type || 'audio/wav';
-			if (!currCallback) throw new Error('Callback not set');
+			if (!currCallback) { throw new Error('Callback not set'); }
 			worker.postMessage({
 				command: 'exportWAV',
 				type: type
 			});
-		}
+		};
 
 		function encode64 (buffer) {
 			var binary = '',
@@ -151,8 +157,10 @@
 				}
 				return ret;
 			}
+
 			if (readInt(20, 2) != 1) throw 'Invalid compression code, not PCM';
 			if (readInt(22, 2) != 1) throw 'Invalid number of channels, not 1';
+
 			return {
 				sampleRate: readInt(24, 4),
 				bitsPerSample: readInt(34, 2),
@@ -172,6 +180,7 @@
 
 		function uploadAudio (mp3Data) {
 			var reader = new FileReader();
+
 			reader.onload = function (event) {
 				var fd = new FormData();
 				var mp3Name = encodeURIComponent('audio_recording_' + new Date().getTime() + '.mp3');
@@ -187,6 +196,7 @@
 					//console.log(data);
 				});
 			};
+
 			reader.readAsDataURL(mp3Data);
 		}
 	};
