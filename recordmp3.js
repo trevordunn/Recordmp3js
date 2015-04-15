@@ -4,8 +4,22 @@
 	var encoderWorker = new Worker('js/mp3Worker.js');
 
 	var Recorder = function (sourceNode, cfg) {
-		var config = cfg || {},
-			currCallback;
+		var config = cfg || {};
+
+		var callbacks = {},
+			nextCallbackId = 0;
+
+		function addCallback(callback) {
+			callbacks[++nextCallbackId] = callback;
+			return nextCallbackId;
+		}
+
+		function getCallback (id) {
+			var callback = callbacks[id];
+			if (!callback) { throw new Error("Recorder: can't find callback '" + id + "'"); }
+			delete callbacks[id];
+			return callback;
+		}
 
 		var recording = false;
 
@@ -38,63 +52,75 @@
 
 		// MP3 conversion
 		worker.onmessage = function (e) {
-			var blob = e.data;
+			var callbackId = e.data.callbackId,
+				callback = callbackId ? getCallback(callbackId) : null;
 
-			var arrayBuffer;
+			var command = e.data.command;
 
-			var fileReader = new FileReader();
-			fileReader.onload = function () {
-				arrayBuffer = this.result;
+			switch (command) {
+				case "exportWAV":
+					var blob = e.data.blob;
 
-				var buffer = new Uint8Array(arrayBuffer),
-					data = parseWav(buffer);
+					var arrayBuffer;
 
-				encoderWorker.postMessage({ cmd: 'init', config:{
-					mode : 3,
-					channels:1,
-					samplerate: data.sampleRate,
-					bitrate: data.bitsPerSample
-				}});
+					var fileReader = new FileReader();
+					fileReader.onload = function () {
+						arrayBuffer = this.result;
 
-				encoderWorker.postMessage({ cmd: 'encode', buf: Uint8ArrayToFloat32Array(data.samples) });
-				encoderWorker.postMessage({ cmd: 'finish' });
+						var buffer = new Uint8Array(arrayBuffer),
+							data = parseWav(buffer);
 
-				encoderWorker.onmessage = function (e) {
-					if (e.data.cmd == 'data') {
-						var url = 'data:audio/mp3;base64,' + encode64(e.data.buf);
+						encoderWorker.postMessage({ cmd: 'init', config:{
+							mode : 3,
+							channels:1,
+							samplerate: data.sampleRate,
+							bitrate: data.bitsPerSample
+						}});
 
-						/*
-						var audio = new Audio();
-						audio.src = url;
-						audio.play();
-						*/
+						encoderWorker.postMessage({ cmd: 'encode', buf: Uint8ArrayToFloat32Array(data.samples) });
+						encoderWorker.postMessage({ cmd: 'finish' });
 
-						var mp3Blob = new Blob(
-							[ new Uint8Array(e.data.buf) ],
-							{ type: 'audio/mp3' }
-						);
+						encoderWorker.onmessage = function (e) {
+							if (e.data.cmd == 'data') {
+								var url = 'data:audio/mp3;base64,' + encode64(e.data.buf);
 
-						uploadAudio(mp3Blob);
+								/*
+								var audio = new Audio();
+								audio.src = url;
+								audio.play();
+								*/
 
-						var li = document.createElement('li');
-						var au = document.createElement('audio');
-						var hf = document.createElement('a');
+								var mp3Blob = new Blob(
+									[ new Uint8Array(e.data.buf) ],
+									{ type: 'audio/mp3' }
+								);
 
-						au.controls = true;
-						au.src = url;
-						hf.href = url;
-						hf.download = 'audio_recording_' + new Date().getTime() + '.mp3';
-						hf.innerHTML = hf.download;
-						li.appendChild(au);
-						li.appendChild(hf);
-						recordingslist.appendChild(li);
-					}
-				};
-			};
+								uploadAudio(mp3Blob);
 
-			fileReader.readAsArrayBuffer(blob);
+								var li = document.createElement('li');
+								var au = document.createElement('audio');
+								var hf = document.createElement('a');
 
-			currCallback(blob);
+								au.controls = true;
+								au.src = url;
+								hf.href = url;
+								hf.download = 'audio_recording_' + new Date().getTime() + '.mp3';
+								hf.innerHTML = hf.download;
+								li.appendChild(au);
+								li.appendChild(hf);
+								recordingslist.appendChild(li);
+							}
+						};
+					};
+
+					fileReader.readAsArrayBuffer(blob);
+
+					if (callback) { callback(blob); }
+					break;
+				case "getBuffer":
+					if (callback) { callback(e.data.buffers); }
+					break;
+			}
 		};
 
 		this.configure = function (cfg) {
@@ -118,16 +144,19 @@
 		};
 
 		this.getBuffer = function (cb) {
-			currCallback = cb || config.callback;
-			worker.postMessage({ command: 'getBuffer' })
+			if (!cb) { throw new Error('getBuffer: Callback not set'); }
+			var callbackId = addCallback(cb);
+			worker.postMessage({ command: 'getBuffer', callbackId: callbackId })
 		};
 
 		this.exportWAV = function (cb, type) {
-			currCallback = cb || config.callback;
+			if (!cb) { throw new Error('exportWAV: Callback not set'); }
+			var callbackId = addCallback(cb);
+
 			type = type || config.type || 'audio/wav';
-			if (!currCallback) { throw new Error('Callback not set'); }
 			worker.postMessage({
 				command: 'exportWAV',
+				callbackId: callbackId,
 				type: type
 			});
 		};

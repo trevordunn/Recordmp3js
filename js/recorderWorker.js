@@ -5,6 +5,8 @@ var recLength = 0,
   sampleRate;
 
 this.onmessage = function(e){
+  var callbackId = e.data.callbackId;
+
   switch(e.data.command){
     case 'init':
       init(e.data.config);
@@ -13,10 +15,10 @@ this.onmessage = function(e){
       record(e.data.buffer);
       break;
     case 'exportWAV':
-      exportWAV(e.data.type);
+      exportWAV(callbackId, e.data.type);
       break;
     case 'getBuffer':
-      getBuffer();
+      getBuffer(callbackId);
       break;
     case 'clear':
       clear();
@@ -34,7 +36,7 @@ function record(inputBuffer){
   recLength += inputBuffer[0].length;
 }
 
-function exportWAV(type){
+function exportWAV(callbackId, type){
   var bufferL = mergeBuffers(recBuffersL, recLength);
   //var bufferR = mergeBuffers(recBuffersR, recLength);
   //var interleaved = interleave(bufferL, bufferR);
@@ -42,14 +44,22 @@ function exportWAV(type){
   var dataview = encodeWAV(bufferL);
   var audioBlob = new Blob([dataview], { type: type });
 
-  this.postMessage(audioBlob);
+  this.postMessage({
+    command: "exportWAV",
+    callbackId: callbackId,
+    blob: audioBlob
+  });
 }
 
-function getBuffer() {
+function getBuffer(callbackId) {
   var buffers = [];
   buffers.push( mergeBuffers(recBuffersL, recLength) );
   buffers.push( mergeBuffers(recBuffersR, recLength) );
-  this.postMessage(buffers);
+  this.postMessage({
+    command: "getBuffer",
+    callbackId: callbackId,
+    buffers: buffers
+  });
 }
 
 function clear(){
