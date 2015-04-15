@@ -1,26 +1,20 @@
-(function(window){
+(function (window) {
 
 	var WORKER_PATH = 'js/recorderWorker.js';
 	var encoderWorker = new Worker('js/mp3Worker.js');
 
-	var Recorder = function(source, cfg) {
-		var config = cfg || {};
-		var bufferLen = config.bufferLen || 4096;
-		this.context = source.context;
-		this.node = (this.context.createScriptProcessor || this.context.createJavaScriptNode)
-						.call(this.context,bufferLen, 2, 2);
-
-		var worker = new Worker(config.workerPath || WORKER_PATH);
-		worker.postMessage({
-			command: 'init',
-			config: {
-				sampleRate: this.context.sampleRate
-			}
-		});
-		var recording = false,
+	var Recorder = function (source, cfg) {
+		var config = cfg || {},
 			currCallback;
 
-		this.node.onaudioprocess = function(e){
+		var recording = false;
+
+		var bufferLen = config.bufferLen || 4096;
+
+		this.context = source.context;
+
+		this.node = (this.context.createScriptProcessor || this.context.createJavaScriptNode).call(this.context,bufferLen, 2, 2);
+		this.node.onaudioprocess = function (e) {
 			if (!recording) return;
 			worker.postMessage({
 				command: 'record',
@@ -31,43 +25,18 @@
 			});
 		}
 
-		this.configure = function(cfg){
-			for (var prop in cfg){
-				if (cfg.hasOwnProperty(prop)){
-					config[prop] = cfg[prop];
-				}
+		source.connect(this.node);
+
+		var worker = new Worker(config.workerPath || WORKER_PATH);
+		worker.postMessage({
+			command: 'init',
+			config: {
+				sampleRate: this.context.sampleRate
 			}
-		}
+		});
 
-		this.record = function(){
-			recording = true;
-		}
-
-		this.stop = function(){
-			recording = false;
-		}
-
-		this.clear = function(){
-			worker.postMessage({ command: 'clear' });
-		}
-
-		this.getBuffer = function(cb) {
-			currCallback = cb || config.callback;
-			worker.postMessage({ command: 'getBuffer' })
-		}
-
-		this.exportWAV = function(cb, type){
-			currCallback = cb || config.callback;
-			type = type || config.type || 'audio/wav';
-			if (!currCallback) throw new Error('Callback not set');
-			worker.postMessage({
-				command: 'exportWAV',
-				type: type
-			});
-		}
-
-		//Mp3 conversion
-		worker.onmessage = function(e){
+		// MP3 conversion
+		worker.onmessage = function (e) {
 			var blob = e.data;
 
 			var arrayBuffer;
@@ -89,7 +58,7 @@
 				encoderWorker.postMessage({ cmd: 'encode', buf: Uint8ArrayToFloat32Array(data.samples) });
 				encoderWorker.postMessage({ cmd: 'finish'});
 
-				encoderWorker.onmessage = function(e) {
+				encoderWorker.onmessage = function (e) {
 					if (e.data.cmd == 'data') {
 						/*var audio = new Audio();
 						audio.src = 'data:audio/mp3;base64,'+encode64(e.data.buf);
@@ -121,7 +90,42 @@
 			currCallback(blob);
 		};
 
-		function encode64(buffer) {
+		this.configure = function (cfg) {
+			for (var prop in cfg) {
+				if (cfg.hasOwnProperty(prop)) {
+					config[prop] = cfg[prop];
+				}
+			}
+		}
+
+		this.record = function () {
+			recording = true;
+		}
+
+		this.stop = function () {
+			recording = false;
+		}
+
+		this.clear = function () {
+			worker.postMessage({ command: 'clear' });
+		}
+
+		this.getBuffer = function (cb) {
+			currCallback = cb || config.callback;
+			worker.postMessage({ command: 'getBuffer' })
+		}
+
+		this.exportWAV = function (cb, type) {
+			currCallback = cb || config.callback;
+			type = type || config.type || 'audio/wav';
+			if (!currCallback) throw new Error('Callback not set');
+			worker.postMessage({
+				command: 'exportWAV',
+				type: type
+			});
+		}
+
+		function encode64 (buffer) {
 			var binary = '',
 				bytes = new Uint8Array( buffer ),
 				len = bytes.byteLength;
@@ -133,7 +137,7 @@
 			return window.btoa( binary );
 		}
 
-		function parseWav(wav) {
+		function parseWav (wav) {
 			function readInt(i, bytes) {
 				var ret = 0,
 					shft = 0;
@@ -155,7 +159,7 @@
 			};
 		}
 
-		function Uint8ArrayToFloat32Array(u8a){
+		function Uint8ArrayToFloat32Array (u8a) {
 			var f32Buffer = new Float32Array(u8a.length);
 			for (var i = 0; i < u8a.length; i++) {
 				var value = u8a[i<<1] + (u8a[(i<<1)+1]<<8);
@@ -165,9 +169,9 @@
 			return f32Buffer;
 		}
 
-		function uploadAudio(mp3Data){
+		function uploadAudio (mp3Data) {
 			var reader = new FileReader();
-			reader.onload = function(event){
+			reader.onload = function (event) {
 				var fd = new FormData();
 				var mp3Name = encodeURIComponent('audio_recording_' + new Date().getTime() + '.mp3');
 				fd.append('fname', mp3Name);
@@ -178,27 +182,27 @@
 					data: fd,
 					processData: false,
 					contentType: false
-				}).done(function(data) {
+				}).done(function (data) {
 					//console.log(data);
 				});
 			};
 			reader.readAsDataURL(mp3Data);
 		}
-
-		source.connect(this.node);
-		this.node.connect(this.context.destination);    //this should not be necessary
 	};
 
-	/*Recorder.forceDownload = function(blob, filename){
-	console.log("Force download");
+	/*
+	Recorder.forceDownload = function (blob, filename) {
+		var clickEvent = document.createEvent("Event");
+		clickEvent.initEvent("click", true, true);
+
 		var url = (window.URL || window.webkitURL).createObjectURL(blob);
+
 		var link = window.document.createElement('a');
 		link.href = url;
 		link.download = filename || 'output.wav';
-		var click = document.createEvent("Event");
-		click.initEvent("click", true, true);
-		link.dispatchEvent(click);
-	}*/
+		link.dispatchEvent(clickEvent);
+	}
+	*/
 
 	window.Recorder = Recorder;
 
