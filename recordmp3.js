@@ -13,8 +13,8 @@
 
 		this.context = source.context;
 
-		this.node = (this.context.createScriptProcessor || this.context.createJavaScriptNode).call(this.context,bufferLen, 2, 2);
-		this.node.onaudioprocess = function (e) {
+		this.processorNode = (this.context.createScriptProcessor || this.context.createJavaScriptNode).call(this.context,bufferLen, 2, 2);
+		this.processorNode.onaudioprocess = function (e) {
 			if (!recording) return;
 			worker.postMessage({
 				command: 'record',
@@ -25,8 +25,8 @@
 			});
 		}
 
-		source.connect(this.node);
-		this.node.connect(this.context.destination);
+		source.connect(this.processorNode);
+		this.processorNode.connect(this.context.destination);
 
 		var worker = new Worker(config.workerPath || WORKER_PATH);
 		worker.postMessage({
